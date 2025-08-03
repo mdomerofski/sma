@@ -1,0 +1,152 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  contentSources   ContentSource[]
+  socialAccounts   SocialAccount[]
+  discoveredContent DiscoveredContent[]
+  generatedPosts   GeneratedPost[]
+
+  @@map("users")
+}
+
+model ContentSource {
+  id          String   @id @default(cuid())
+  name        String
+  url         String
+  type        SourceType @default(RSS)
+  isActive    Boolean  @default(true)
+  lastCrawled DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  discoveredContent DiscoveredContent[]
+
+  @@index([userId])
+  @@index([isActive])
+  @@map("content_sources")
+}
+
+model DiscoveredContent {
+  id          String   @id @default(cuid())
+  title       String
+  content     String?
+  url         String
+  publishedAt DateTime?
+  isProcessed Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  userId          String
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contentSourceId String
+  contentSource   ContentSource @relation(fields: [contentSourceId], references: [id], onDelete: Cascade)
+
+  generatedPosts GeneratedPost[]
+
+  @@index([userId])
+  @@index([isProcessed])
+  @@index([contentSourceId])
+  @@map("discovered_content")
+}
+
+model SocialAccount {
+  id           String      @id @default(cuid())
+  platform     Platform
+  accountName  String
+  accessToken  String?
+  accessSecret String?
+  isActive     Boolean     @default(true)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  generatedPosts GeneratedPost[]
+
+  @@unique([userId, platform])
+  @@index([userId])
+  @@index([platform])
+  @@map("social_accounts")
+}
+
+model GeneratedPost {
+  id          String     @id @default(cuid())
+  content     String
+  status      PostStatus @default(DRAFT)
+  platform    Platform
+  scheduledAt DateTime?
+  publishedAt DateTime?
+  metadata    Json?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  userId               String
+  user                 User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  discoveredContentId  String
+  discoveredContent    DiscoveredContent @relation(fields: [discoveredContentId], references: [id], onDelete: Cascade)
+  socialAccountId      String
+  socialAccount        SocialAccount     @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+
+  analytics PostAnalytics[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([platform])
+  @@index([scheduledAt])
+  @@map("generated_posts")
+}
+
+model PostAnalytics {
+  id        String   @id @default(cuid())
+  likes     Int      @default(0)
+  shares    Int      @default(0)
+  comments  Int      @default(0)
+  views     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  postId String
+  post   GeneratedPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([postId])
+  @@map("post_analytics")
+}
+
+enum SourceType {
+  RSS
+  API
+}
+
+enum Platform {
+  TWITTER
+  FACEBOOK
+  LINKEDIN
+  INSTAGRAM
+}
+
+enum PostStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  SCHEDULED
+  PUBLISHED
+  FAILED
+}
